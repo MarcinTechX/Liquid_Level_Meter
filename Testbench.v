@@ -12,6 +12,7 @@ module Testbench;
     parameter LED_COUNT = 3; // Number of clock cycles after which LEDs toggle during alarm (shortened for testbench)
 
     reg clk;
+    reg rst_n;
     reg [SWITCHES_WIDTH - 1:0] switches;
     reg isMeasured;
     reg set_low_level;
@@ -35,6 +36,7 @@ module Testbench;
     )
     tb_instance (
         .clk(clk),
+        .rst_n(rst_n),
         .switches(switches),
         .isMeasured(isMeasured),
         .set_low_level(set_low_level),
@@ -61,8 +63,12 @@ module Testbench;
         $display("Maximum liquid level: %0d", (1 << SWITCHES_WIDTH) - 1);
 
         clk = 0;
+        rst_n = 0;
         $display("@ %0t ns: Simulation started", $time);
         switches = 10'b1000000000;
+
+        #5 rst_n = 1;
+
         $display("@ %0t ns: Initial liquid level: %0d", $time, switches);
         #15 isMeasured = 1'b0;
         $display("@ %0t ns: Entering alarm setting mode", $time);

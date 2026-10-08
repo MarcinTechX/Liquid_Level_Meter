@@ -19,6 +19,7 @@ module Miniprojekt #(
     parameter LED_COUNT = 49999999  // Number of clock cycles after which LEDs toggle during alarm
 )(
     input clk, // Clock
+    input rst_n, // Asynchronous active-low reset
     input [SWITCHES_WIDTH - 1:0] switches, // Switches representing liquid level
     input isMeasured, // 1 = measuring, 0 = setting alarms
     input set_low_level, // 0 = user sets low critical level
@@ -46,16 +47,20 @@ module Miniprojekt #(
     end
 
     // Set low critical level if button pressed and not measuring
-    always @(posedge clk) begin
-        if (!set_low_level && !isMeasured)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            low_level <= 0;
+        else if (!set_low_level && !isMeasured)
             low_level <= switches;
         else
             low_level <= low_level;
     end
 
     // Set high critical level if button pressed and not measuring
-    always @(posedge clk) begin
-        if (!set_high_level && !isMeasured)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            high_level <= (1 << SWITCHES_WIDTH) - 1;
+        else if (!set_high_level && !isMeasured)
             high_level <= switches;
         else
             high_level <= high_level;
@@ -67,8 +72,10 @@ module Miniprojekt #(
     integer i; // Loop variable
 
     // Convert percentage to BCD using double dabble algorithm
-    always @(posedge clk) begin
-        if (isMeasured) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            bcd <= 0;
+        else if (isMeasured) begin
             bcd = 0;
             for (i = 0; i < 7; i = i + 1) begin
                 if (bcd[3:0] >= 5) bcd[3:0] = bcd[3:0] + 3;
@@ -77,20 +84,27 @@ module Miniprojekt #(
                 bcd = {bcd[10:0], convert_to_percent[6-i]};
             end
         end
-        else bcd = bcd;
+        else
+            bcd = bcd;
     end
 
     // Set alarm if liquid level is out of critical range
-    always @(posedge clk) begin
-        if (switches < low_level || switches > high_level)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            alarm <= 1'b0;
+        else if (switches < low_level || switches > high_level)
             alarm <= 1;
         else
             alarm <= 0;
     end
 
     // LED blinking logic
-    always @(posedge clk) begin
-        if (alarm && isMeasured) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            count <= LED_COUNT - 1;
+            led_state <= 1'b0;
+        end
+        else if (alarm && isMeasured) begin
             if (count > 0)
                 count <= count - 1;
             else begin
@@ -103,16 +117,23 @@ module Miniprojekt #(
     end
 
     // Turn off LEDs if no alarm
-    always @(posedge clk) begin
-        if (!alarm)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            led_state = 0;
+        else if (!alarm)
             led_state = 0;
         else
             led_state = led_state;
     end
 
     // Update 7-segment displays
-    always @(posedge clk) begin
-        if (isMeasured) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            seg1 <= ~7'b0000000;
+            seg2 <= ~7'b0000000;
+            seg3 <= ~7'b0000000;
+        end
+        else if (isMeasured) begin
             // Units
             case(bcd[3:0])
                 4'b0000 : seg1 <= ~7'b0111111;
@@ -127,6 +148,7 @@ module Miniprojekt #(
                 4'b1001 : seg1 <= ~7'b1101111;
                 default : seg1 <= ~7'b1111111;
             endcase
+
             // Tens
             case(bcd[7:4])
                 4'b0000 : seg2 <= ~7'b0111111;
@@ -141,6 +163,7 @@ module Miniprojekt #(
                 4'b1001 : seg2 <= ~7'b1101111;
                 default : seg2 <= ~7'b1111111;
             endcase
+
             // Hundreds
             case(bcd[11:8])
                 4'b0000 : seg3 <= ~7'b0111111;
