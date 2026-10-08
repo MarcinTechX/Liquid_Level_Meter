@@ -27,6 +27,7 @@ When in the setting mode, the system stops measuring the liquid level. After rel
 ### Inputs
 
 - `clk` – Clock signal  
+- `rst_n` – Asynchronous active-low reset signal
 - `switches` – Switches representing liquid level  
 - `isMeasured` – Measurement mode (1 = measuring, 0 = setting alarm)  
 - `set_low_level` – Set critical low level (active low)  
